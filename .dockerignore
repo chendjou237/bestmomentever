@@ -1,0 +1,87 @@
+# Docker ignore file for Stocky Inventory Management System
+
+# Node modules and build artifacts
+node_modules/
+npm-debug.log
+yarn-error.log
+.npm/
+.yarn/
+
+# Composer dependencies
+vendor/
+
+# Environment files
+.env
+.env.backup
+.env.production
+.env.local
+.env.*.local
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Laravel specific
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/logs/*
+bootstrap/cache/*
+!storage/framework/.gitkeep
+!storage/framework/cache/.gitkeep
+!storage/framework/sessions/.gitkeep
+!storage/framework/views/.gitkeep
+!storage/logs/.gitkeep
+!bootstrap/cache/.gitkeep
+
+# Public build artifacts (will be built in Docker)
+public/css/
+public/js/
+public/mix-manifest.json
+public/hot
+
+# Testing
+.phpunit.result.cache
+coverage/
+.phpunit.cache/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+README.md
+CHANGELOG.md
+documentation/
+documentation 2/
+documentation.zip
+
+# Docker files (to avoid recursion)
+Dockerfile
+docker-compose.yml
+compose.yaml
+.dockerignore
+
+# Backup and temporary files
+*.sql
+*.sql.gz
+*.backup
+*.bak
+*.tmp
+*.log
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Laravel Mix
+webpack.mix.js.bak
+
+# Modules (if using nwidart/laravel-modules)
+Modules/*/node_modules/
+Modules/*/vendor/
