@@ -38,7 +38,9 @@ RUN composer install \
     --no-scripts \
     --no-autoloader \
     --prefer-dist \
-    --optimize-autoloader
+    --optimize-autoloader \
+    --ignore-platform-req=ext-gd \
+    --ignore-platform-req=ext-calendar
 
 ################################################################################
 # Stage 3: Final Production Image
@@ -62,20 +64,22 @@ RUN apt-get update && apt-get install -y \
 
 # Install PHP extensions required by Laravel and Stocky
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) \
+    && docker-php-ext-install -j$(nproc) gd
+
+RUN docker-php-ext-install -j$(nproc) \
     pdo \
     pdo_mysql \
     mbstring \
     exif \
     pcntl \
     bcmath \
-    gd \
     zip \
     xml \
     tokenizer \
     ctype \
     json \
-    fileinfo
+    fileinfo \
+    calendar
 
 # Enable Apache modules
 RUN a2enmod rewrite headers
