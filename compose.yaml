@@ -1,5 +1,5 @@
 # Docker Compose configuration for Stocky Inventory Management System
-# Laravel 10 + Vue.js + MySQL + Redis
+# Simplified setup with Laravel + MySQL only
 
 services:
   # MySQL Database
@@ -23,23 +23,6 @@ services:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD:-secret}"]
       interval: 10s
       timeout: 5s
-      retries: 5
-
-  # Redis Cache
-  redis:
-    image: redis:7-alpine
-    container_name: stocky_redis
-    restart: unless-stopped
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    volumes:
-      - redis-data:/data
-    networks:
-      - stocky-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
       retries: 5
 
   # PHP-FPM + Apache (Laravel Application)
@@ -67,15 +50,10 @@ services:
       DB_USERNAME: ${DB_USERNAME:-stocky_user}
       DB_PASSWORD: ${DB_PASSWORD:-secret}
 
-      # Cache Configuration
-      CACHE_DRIVER: redis
-      SESSION_DRIVER: redis
-      QUEUE_CONNECTION: redis
-
-      # Redis Configuration
-      REDIS_HOST: redis
-      REDIS_PASSWORD: null
-      REDIS_PORT: 6379
+      # Cache Configuration (file-based)
+      CACHE_DRIVER: file
+      SESSION_DRIVER: file
+      QUEUE_CONNECTION: sync
 
       # Mail Configuration
       MAIL_MAILER: ${MAIL_MAILER:-smtp}
@@ -97,79 +75,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - stocky-network
-
-  # Queue Worker (for background jobs)
-  queue:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: stocky_queue
-    restart: unless-stopped
-    command: php artisan queue:work --sleep=3 --tries=3 --max-time=3600
-    environment:
-      # Same environment as app
-      APP_ENV: ${APP_ENV:-production}
-      APP_KEY: ${APP_KEY}
-      DB_CONNECTION: mysql
-      DB_HOST: db
-      DB_PORT: 3306
-      DB_DATABASE: ${DB_DATABASE:-stocky}
-      DB_USERNAME: ${DB_USERNAME:-stocky_user}
-      DB_PASSWORD: ${DB_PASSWORD:-secret}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      QUEUE_CONNECTION: redis
-    volumes:
-      - ./storage:/var/www/html/storage
-    depends_on:
-      - app
-      - db
-      - redis
-    networks:
-      - stocky-network
-
-  # Scheduler (for Laravel cron jobs)
-  scheduler:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: stocky_scheduler
-    restart: unless-stopped
-    command: >
-      sh -c "while true; do
-        php artisan schedule:run --verbose --no-interaction &
-        sleep 60
-      done"
-    environment:
-      # Same environment as app
-      APP_ENV: ${APP_ENV:-production}
-      APP_KEY: ${APP_KEY}
-      DB_CONNECTION: mysql
-      DB_HOST: db
-      DB_PORT: 3306
-      DB_DATABASE: ${DB_DATABASE:-stocky}
-      DB_USERNAME: ${DB_USERNAME:-stocky_user}
-      DB_PASSWORD: ${DB_PASSWORD:-secret}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-    volumes:
-      - ./storage:/var/www/html/storage
-    depends_on:
-      - app
-      - db
-      - redis
     networks:
       - stocky-network
 
 # Persistent volumes
 volumes:
   db-data:
-    driver: local
-  redis-data:
     driver: local
 
 # Network configuration

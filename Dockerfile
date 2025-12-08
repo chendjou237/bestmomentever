@@ -4,15 +4,16 @@
 ################################################################################
 # Stage 1: Build Frontend Assets
 ################################################################################
-FROM node:18-alpine AS frontend-builder
+FROM node:18-slim AS frontend-builder
 
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies (including devDependencies for build)
-RUN npm ci
+# Install dependencies without running build scripts (skip node-sass compilation)
+# The project has 'sass' (Dart Sass) which doesn't need compilation
+RUN npm ci --ignore-scripts || npm install --ignore-scripts
 
 # Copy source files needed for build
 COPY resources ./resources
@@ -60,6 +61,7 @@ RUN apt-get update && apt-get install -y \
     libfreetype6-dev \
     libjpeg62-turbo-dev \
     libpq-dev \
+    bison \
     && rm -rf /var/lib/apt/lists/*
 
 # Install PHP extensions required by Laravel and Stocky
@@ -75,10 +77,6 @@ RUN docker-php-ext-install -j$(nproc) \
     bcmath \
     zip \
     xml \
-    tokenizer \
-    ctype \
-    json \
-    fileinfo \
     calendar
 
 # Enable Apache modules

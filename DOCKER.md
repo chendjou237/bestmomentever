@@ -1,62 +1,43 @@
-# Stocky Inventory Management System - Docker Setup
+# Stocky Inventory Management System - Docker Setup (Simplified)
 
-This directory contains Docker configuration files for running Stocky in containers.
+This directory contains a simplified Docker configuration for running Stocky with just the essential services.
+
+## Services
+
+- **App (Laravel + Apache)** - Main web application
+- **Database (MySQL 8.0)** - Primary database
 
 ## Quick Start
 
 1. **Copy environment file:**
    ```bash
-   cp .env.example .env
+   cp .env.docker.example .env
    ```
 
-2. **Generate application key:**
+2. **Update database password in .env:**
+   ```bash
+   # Edit .env and change:
+   DB_PASSWORD=your_secure_password
+   ```
+
+3. **Generate application key:**
    ```bash
    docker-compose run --rm app php artisan key:generate
    ```
 
-3. **Install Passport (OAuth2):**
+4. **Install Passport (OAuth2):**
    ```bash
    docker-compose run --rm app php artisan passport:install
    ```
 
-4. **Start the application:**
+5. **Start the application:**
    ```bash
    docker-compose up -d
    ```
 
-5. **Access the application:**
+6. **Access the application:**
    - Application: http://localhost:8000
    - Database: localhost:3306
-   - Redis: localhost:6379
-
-## Services
-
-### App (Laravel + Apache)
-- **Port:** 8000 (configurable via `APP_PORT` in .env)
-- **Purpose:** Main web application
-- **Health:** Depends on database and Redis
-
-### Database (MySQL 8.0)
-- **Port:** 3306 (configurable via `DB_PORT` in .env)
-- **Purpose:** Primary database
-- **Volume:** `db-data` (persistent)
-- **Default credentials:**
-  - Database: `stocky`
-  - User: `stocky_user`
-  - Password: `secret` (change in .env)
-
-### Redis
-- **Port:** 6379 (configurable via `REDIS_PORT` in .env)
-- **Purpose:** Cache, sessions, and queue backend
-- **Volume:** `redis-data` (persistent)
-
-### Queue Worker
-- **Purpose:** Process background jobs (emails, notifications, etc.)
-- **Command:** `php artisan queue:work`
-
-### Scheduler
-- **Purpose:** Run Laravel scheduled tasks (cron jobs)
-- **Command:** `php artisan schedule:run` (every minute)
 
 ## Environment Variables
 
@@ -79,14 +60,10 @@ DB_DATABASE=stocky
 DB_USERNAME=stocky_user
 DB_PASSWORD=secret          # CHANGE THIS!
 
-# Redis
-REDIS_HOST=redis
-REDIS_PORT=6379
-
-# Cache & Session
-CACHE_DRIVER=redis
-SESSION_DRIVER=redis
-QUEUE_CONNECTION=redis
+# Cache & Session (file-based)
+CACHE_DRIVER=file
+SESSION_DRIVER=file
+QUEUE_CONNECTION=sync       # Synchronous - no background jobs
 
 # Mail (configure for your SMTP provider)
 MAIL_MAILER=smtp
@@ -132,7 +109,7 @@ docker-compose exec app php artisan db:seed
 docker-compose exec app php artisan migrate:fresh --seed
 
 # Create database backup
-docker-compose exec db mysqldump -u stocky_user -psecret stocky > backup.sql
+docker-compose exec db mysqldump -u stocky_user -p stocky > backup.sql
 ```
 
 ### Application Management
@@ -153,18 +130,6 @@ docker-compose exec app php artisan passport:install
 
 # Create admin user (if seeder available)
 docker-compose exec app php artisan db:seed --class=UserSeeder
-```
-
-### Queue and Scheduler
-```bash
-# View queue worker logs
-docker-compose logs -f queue
-
-# Restart queue worker
-docker-compose restart queue
-
-# View scheduler logs
-docker-compose logs -f scheduler
 ```
 
 ### File Permissions
@@ -248,27 +213,36 @@ docker-compose up -d --build
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                     Load Balancer                       │
-│                    (Nginx/Traefik)                      │
-└────────────────────┬────────────────────────────────────┘
-                     │
-         ┌───────────┴───────────┐
-         │                       │
-┌────────▼────────┐    ┌────────▼────────┐
-│   App Service   │    │  Queue Worker   │
-│  (Laravel+Vue)  │    │   (Background)  │
-└────────┬────────┘    └────────┬────────┘
-         │                      │
-         └──────────┬───────────┘
-                    │
-         ┌──────────┼──────────┐
-         │          │          │
-    ┌────▼───┐ ┌───▼────┐ ┌──▼──────┐
-    │ MySQL  │ │ Redis  │ │Scheduler│
-    │   DB   │ │ Cache  │ │  (Cron) │
-    └────────┘ └────────┘ └─────────┘
+┌─────────────────────────────────────┐
+│         Load Balancer               │
+│        (Nginx/Traefik)              │
+└──────────────┬──────────────────────┘
+               │
+               │
+      ┌────────▼────────┐
+      │   App Service   │
+      │  (Laravel+Vue)  │
+      └────────┬────────┘
+               │
+               │
+          ┌────▼────┐
+          │  MySQL  │
+          │   DB    │
+          └─────────┘
 ```
+
+## Notes
+
+- **Cache**: Uses file-based cache (stored in `storage/framework/cache`)
+- **Sessions**: Uses file-based sessions (stored in `storage/framework/sessions`)
+- **Queues**: Runs synchronously (no background processing)
+- **Emails**: Sent immediately (no queue)
+
+### When to upgrade:
+If you need background job processing, scheduled tasks, or better performance with caching, consider adding:
+- Redis for cache/sessions/queues
+- Queue worker service
+- Scheduler service
 
 ## Support
 

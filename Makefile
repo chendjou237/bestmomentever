@@ -1,7 +1,7 @@
-# Makefile for Stocky Docker Management
+# Makefile for Stocky Docker Management (Simplified)
 # Usage: make [target]
 
-.PHONY: help build up down restart logs shell db-shell redis-cli migrate seed fresh install clean backup restore
+.PHONY: help build up down restart logs shell db-shell migrate seed fresh install clean backup restore
 
 # Default target
 .DEFAULT_GOAL := help
@@ -50,18 +50,12 @@ logs-app: ## View application logs
 logs-db: ## View database logs
 	docker-compose logs -f db
 
-logs-queue: ## View queue worker logs
-	docker-compose logs -f queue
-
 # Shell Access
 shell: ## Open shell in app container
 	docker-compose exec app bash
 
 db-shell: ## Open MySQL shell
 	docker-compose exec db mysql -u stocky_user -p stocky
-
-redis-cli: ## Open Redis CLI
-	docker-compose exec redis redis-cli
 
 # Database Operations
 migrate: ## Run database migrations
@@ -164,14 +158,6 @@ test: ## Run tests
 tinker: ## Open Laravel Tinker
 	docker-compose exec app php artisan tinker
 
-# Queue Management
-queue-restart: ## Restart queue worker
-	docker-compose restart queue
-	@echo "$(GREEN)Queue worker restarted!$(NC)"
-
-queue-work: ## Run queue worker in foreground
-	docker-compose exec app php artisan queue:work
-
 # Permissions
 fix-permissions: ## Fix storage permissions
 	@echo "$(BLUE)Fixing permissions...$(NC)"
@@ -190,6 +176,3 @@ health: ## Check service health
 	@echo ""
 	@echo "$(BLUE)Testing database connection...$(NC)"
 	@docker-compose exec app php artisan migrate:status || echo "$(RED)Database connection failed!$(NC)"
-	@echo ""
-	@echo "$(BLUE)Testing Redis connection...$(NC)"
-	@docker-compose exec redis redis-cli ping || echo "$(RED)Redis connection failed!$(NC)"
