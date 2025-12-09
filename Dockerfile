@@ -1,54 +1,7 @@
-# Multi-stage Dockerfile for Stocky Inventory Management System
-# Laravel 10 + Vue.js + MySQL
+# Simple Dockerfile for Stocky Inventory Management System
+FROM php:8.3-apache
 
-################################################################################
-# Stage 1: Build Frontend Assets
-################################################################################
-FROM node:18-slim AS frontend-builder
-
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies without running build scripts (skip node-sass compilation)
-# The project has 'sass' (Dart Sass) which doesn't need compilation
-RUN npm ci --ignore-scripts || npm install --ignore-scripts
-
-# Copy source files needed for build
-COPY resources ./resources
-COPY webpack.mix.js ./
-COPY .babelrc* ./
-
-# Build production assets
-RUN npm run prod
-
-################################################################################
-# Stage 2: Install PHP Dependencies
-################################################################################
-FROM composer:2.6 AS php-deps
-
-WORKDIR /app
-
-# Copy composer files
-COPY composer.json composer.lock ./
-
-# Install PHP dependencies (production only)
-RUN composer install \
-    --no-dev \
-    --no-scripts \
-    --no-autoloader \
-    --prefer-dist \
-    --optimize-autoloader \
-    --ignore-platform-req=ext-gd \
-    --ignore-platform-req=ext-calendar
-
-################################################################################
-# Stage 3: Final Production Image
-################################################################################
-FROM php:8.2-apache AS final
-
-# Install system dependencies
+# Install system dependencies and PHP extensions in one layer
 RUN apt-get update && apt-get install -y \
     git \
     curl \
@@ -60,97 +13,84 @@ RUN apt-get update && apt-get install -y \
     unzip \
     libfreetype6-dev \
     libjpeg62-turbo-dev \
-    libpq-dev \
-    bison \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j$(nproc) \
+        gd \
+        pdo \
+        pdo_mysql \
+        mbstring \
+        exif \
+        pcntl \
+        bcmath \
+        zip \
+        xml \
+        calendar \
+    && a2enmod rewrite headers \
     && rm -rf /var/lib/apt/lists/*
 
-# Install PHP extensions required by Laravel and Stocky
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) gd
+# Install Composer
+COPY --from=composer:2.6 /usr/bin/composer /usr/bin/composer
 
-RUN docker-php-ext-install -j$(nproc) \
-    pdo \
-    pdo_mysql \
-    mbstring \
-    exif \
-    pcntl \
-    bcmath \
-    zip \
-    xml \
-    calendar
+# Install Node.js 14 using NVM (NodeSource doesn't support Node 14 on Debian Trixie)
+ENV NVM_DIR=/root/.nvm
+ENV NODE_VERSION=14.21.3
+RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash \
+    && . "$NVM_DIR/nvm.sh" \
+    && nvm install ${NODE_VERSION} \
+    && nvm alias default ${NODE_VERSION} \
+    && nvm use default
 
-# Enable Apache modules
-RUN a2enmod rewrite headers
-
-# Configure Apache DocumentRoot
-ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
-RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
-RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
+# Add node and npm to path
+ENV NODE_PATH=$NVM_DIR/versions/node/v$NODE_VERSION/lib/node_modules
+ENV PATH=$NVM_DIR/versions/node/v$NODE_VERSION/bin:$PATH
 
 # Set working directory
 WORKDIR /var/www/html
 
-# Copy vendor from composer stage
-COPY --from=php-deps /app/vendor ./vendor
-
-# Copy built frontend assets from frontend-builder stage
-COPY --from=frontend-builder /app/public/css ./public/css
-COPY --from=frontend-builder /app/public/js ./public/js
-COPY --from=frontend-builder /app/public/mix-manifest.json ./public/mix-manifest.json
+# Configure Apache
+ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf \
+    && sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
 
 # Copy application files
 COPY . .
 
-# Copy production PHP configuration
-RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
+# Install PHP dependencies
+RUN composer install --no-dev --optimize-autoloader --no-interaction
 
-# Create custom PHP configuration for Laravel
-RUN echo "upload_max_filesize = 100M" >> "$PHP_INI_DIR/conf.d/uploads.ini" \
+# Note: Build frontend assets locally before building Docker image
+# Run: npm install && npm run prod
+
+# Configure PHP
+RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
+    && echo "upload_max_filesize = 100M" >> "$PHP_INI_DIR/conf.d/uploads.ini" \
     && echo "post_max_size = 100M" >> "$PHP_INI_DIR/conf.d/uploads.ini" \
     && echo "memory_limit = 256M" >> "$PHP_INI_DIR/conf.d/uploads.ini" \
     && echo "max_execution_time = 300" >> "$PHP_INI_DIR/conf.d/uploads.ini"
 
-# Set proper permissions
+# Set permissions
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html/storage \
     && chmod -R 755 /var/www/html/bootstrap/cache
 
-# Generate optimized autoloader
-RUN composer dump-autoload --optimize --no-dev
-
 # Create entrypoint script
-COPY <<'EOF' /usr/local/bin/docker-entrypoint.sh
-#!/bin/bash
-set -e
+RUN echo '#!/bin/bash\n\
+set -e\n\
+echo "Waiting for database..."\n\
+until php artisan migrate:status 2>/dev/null; do\n\
+    echo "Database is unavailable - sleeping"\n\
+    sleep 2\n\
+done\n\
+echo "Database is ready!"\n\
+php artisan migrate --force\n\
+php artisan config:cache\n\
+php artisan route:cache\n\
+php artisan view:cache\n\
+exec apache2-foreground' > /usr/local/bin/docker-entrypoint.sh \
+    && chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Wait for database to be ready
-echo "Waiting for database..."
-until php artisan migrate:status 2>/dev/null; do
-    echo "Database is unavailable - sleeping"
-    sleep 2
-done
-
-echo "Database is ready!"
-
-# Run migrations
-php artisan migrate --force
-
-# Cache configuration
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
-
-# Start Apache
-exec apache2-foreground
-EOF
-
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-
-# Switch to non-privileged user
 USER www-data
 
-# Expose port 80
 EXPOSE 80
 
-# Set entrypoint
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

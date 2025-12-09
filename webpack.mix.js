@@ -21,10 +21,25 @@ mix.js('resources/src/main.js', 'public').js('resources/src/login.js', 'public')
 
     mix.webpackConfig({
         output: {
-          
+
             filename:'js/[name].min.js',
             chunkFilename: 'js/bundle/[name].[hash].js',
           },
+        module: {
+            rules: [
+                {
+                    test: /\.scss$/,
+                    use: [
+                        {
+                            loader: 'sass-loader',
+                            options: {
+                                implementation: require('sass'),
+                            },
+                        },
+                    ],
+                },
+            ],
+        },
         plugins: [
             new MomentLocalesPlugin(),
             new CleanWebpackPlugin({
@@ -32,4 +47,3 @@ mix.js('resources/src/main.js', 'public').js('resources/src/login.js', 'public')
               }),
         ]
     });
-
