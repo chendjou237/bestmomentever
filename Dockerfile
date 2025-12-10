@@ -73,21 +73,9 @@ RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html/storage \
     && chmod -R 755 /var/www/html/bootstrap/cache
 
-# Create entrypoint script
-RUN echo '#!/bin/bash\n\
-set -e\n\
-echo "Waiting for database..."\n\
-until php -r "try { new PDO(\"mysql:host=${DB_HOST};port=${DB_PORT:-3306};dbname=${DB_DATABASE}\", \"${DB_USERNAME}\", \"${DB_PASSWORD}\"); } catch(PDOException \$e) { fwrite(STDERR, \"Connection failed: \" . \$e->getMessage() . \"\n\"); exit(1); }"; do\n\
-    echo "Database is unavailable - sleeping"\n\
-    sleep 2\n\
-done\n\
-echo "Database is ready!"\n\
-php artisan migrate --force\n\
-php artisan config:cache\n\
-php artisan route:cache\n\
-php artisan view:cache\n\
-exec apache2-foreground' > /usr/local/bin/docker-entrypoint.sh \
-    && chmod +x /usr/local/bin/docker-entrypoint.sh
+# Copy and set up entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 USER www-data
 
