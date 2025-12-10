@@ -12,6 +12,7 @@ services:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-secret}
       MYSQL_USER: ${DB_USERNAME:-stocky_user}
       MYSQL_PASSWORD: ${DB_PASSWORD:-secret}
+    command: --default-authentication-plugin=mysql_native_password
     volumes:
       - db-data:/var/lib/mysql
       - ./docker/mysql/my.cnf:/etc/mysql/conf.d/my.cnf

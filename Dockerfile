@@ -77,7 +77,7 @@ RUN chown -R www-data:www-data /var/www/html \
 RUN echo '#!/bin/bash\n\
 set -e\n\
 echo "Waiting for database..."\n\
-until php artisan migrate:status 2>/dev/null; do\n\
+until php -r "try { new PDO(\"mysql:host=${DB_HOST};port=${DB_PORT:-3306};dbname=${DB_DATABASE}\", \"${DB_USERNAME}\", \"${DB_PASSWORD}\"); } catch(PDOException \$e) { fwrite(STDERR, \"Connection failed: \" . \$e->getMessage() . \"\n\"); exit(1); }"; do\n\
     echo "Database is unavailable - sleeping"\n\
     sleep 2\n\
 done\n\
